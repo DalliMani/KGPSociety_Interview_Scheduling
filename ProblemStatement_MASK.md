@@ -36,6 +36,9 @@ y as possible. SOFT PENALTY.
 7. It is preferred that all interviews for a certain interviewer be done in a continuous strech. i.e. the gaps between the interviews for an interviewer should be minimised.
     
     This will be referred to as "Fragmentation" penalty
-8.
-    
+8. Interviewers may have a tendency to conduct interviews with the same co-interviewers. So the number of unique-sets of interviewers can be minimised. SOFT PENALTY. 
+
+    This is not a penalty we will look to much but is presented as it was given in a literature I was reading. This is called the "Unique Panels" penalty. Kinda not-obvious from name.
+
+9. 
     More constraints to be added further.
