@@ -37,7 +37,8 @@ MAX_PARALLEL_INTERVIEWS = 5
 # 6. Unique Panel penalty.
 
 # GA Weights
-creator.create("FitnessMin", base.Fitness, weights=(-10000.0, -50.0, -20.0, -5.0, -5.0, -1.0))
+GA_WEIGHTS = (-10000.0, -50.0, -20.0, -5.0, -5.0, -1.0)
+creator.create("FitnessMin", base.Fitness, weights=GA_WEIGHTS)
 creator.create("Individual", list, fitness=creator.FitnessMin)
 
 # A GA is applied onto a the problem by the implementation of the following:
@@ -71,8 +72,83 @@ def custom_mutate(ind, indpb):
                 ind[i][0], ind[i][1] = sorted(random.sample(range(NUM_INTERVIEWERS), 2))
     return ind,
 
+toolbox.register("mate", tools.cxTwoPoint)
+toolbox.register("mutate", custom_mutate, indpb=0.1)
+toolbox.register("select", tools.selTournament, tournsize=3)
+
 def evaluate(ind):
-    return 
+    #Literal penalties
+    hard_penalty=0
+    candidate_satisfice_penalty=0
+    double_booking_penalty=0
+    venue_penalty=0
+    makespan_penalty=0
+    workload_penalty=0
+    relevance_penalty=0
+    fragmentation_penalty=0
+    unique_panel_penalty=0
+
+    #Helpers to define the penalties
+    max_slot_used=min_slot_used=0
+    max_workload=0 #workload_penalty is actually literally that the maxiumum worload be minimised so workload_penalty = max_workload
+
+    #Objects made during the process of evaluation.
+    slot_usage=collections.defaultdict(int)
+    interviewer_schedule=collections.defaultdict(int)
+    used_pairs=set()
+    
+    for c_idx,gene in enumerate(indidivual):
+        i1, i2, slot = gene
+        cand = CANDIDATES[c_idx]
+        req_skills = set(cand['applied'])
+        
+        #Get Interviewers' skills
+        s1 = INT_SKILL_MAP[INT_ID_MAP[i1]]
+        s2 = INT_SKILL_MAP[INT_ID_MAP[i2]]
+
+        if not req_skills.issubset(s1.union(s2)):
+            candidate_satisfice_penalty += 1
+        
+        if not s1.intersection(req_skills):
+            relevance_penalty += 1
+        if not s2.intersection(req_skills):
+            relevance_penalty += 1
+        
+        slot_usage[slot] += 1
+        interviewer_schedule[i1].append(slot)
+        interviewer_schedule[i2].append(slot)
+        used_pairs.add((i1,i2))
+
+        if slot > max_slot_used:
+            max_slot_used  = slot
+        if slot < min_slot_used:
+            min_slot_used = slot
+
+    for i_idx, slots in interviewer_schedule.items():
+        unique_slots = sorted(list(set(slots)))
+        if len(slots)!= len(unique_slots):
+            double_booking_penalty += len(slots) - len(unique_slots)
+        
+        workload = len(unique_slots)
+        if workload > max_workload:
+            max_workload = count
+        
+        if len(unique_slots) > 1:
+            for k in range(len(unique_slots)-1):
+                gap = unique_slots[k+1] - unique_slots[k] -1
+                if gap > 0:
+                    fragmentation_penalty += gap
+    
+    for slot, count in slot_usage.items():
+        if count > MAX_PARALLEL_INTERVIEWS:
+            venue_penalty += (count - MAX_PARALLEL_INTERVIEWS)
+    unique_panel_penalty += len(used_pairs)
+
+    #Using the helpers
+    hard_penalty = candidate_satisfice_penalty + double_booking_penalty + venue_penalty
+    makespan_penalty = max_slot_used-min_slot_used
+    workload_penalty = max_workload
+    return (hard_penalty, makespan_penalty, workload_penalty, relevance_penalty, fragmentation_penalty, unique_panel_penalty)
 
 def main():
     print("Hello from kgpsociety-interview-scheduling!")
