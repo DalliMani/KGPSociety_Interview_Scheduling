@@ -2,19 +2,56 @@ import random
 import numpy as np
 from deap import base, creator, tools, algorithms
 import collections
+import os,pickle, warnings
+import csv
 
 # Taking the approach of a Genetic Algorithm (GA) for this since I did a tutorial of solving VRP with GA.
 # The individual is a list of tuples of the format (Interviewer1, Interviewer2, Slot) which will be called a gene. This is because the list of candidates is constant.
 
 # Everything about the GA will be explained as the code goes.
 
-# Here's a preliminary data from MASK 2024. This is quite inaccurate because it listed only freshers who were selected, but the associates involve existing members and selected members.
-assocs_t = {'Priyanshu Verma': {'DNA'}, 'Satadru Sen': {'Music'}, 'Ajayendra Kumar Bansod': {'WebD'}, 'Pratyush Parth': {'Music', 'MN'}, 'Arghadeep Ghosh': {'DNA', 'MN'}, 'Krishna Chaitanya Terlapu': {'DNA'}, 'Aditya Sharma': {'Q'}, 'Mourya Grandhi': {'WebD'}, 'Pranali Patil ': {'DNA'}, 'Pratyay Ganguly': {'WebD'}, 'Argha Sarkar': {'AMV'}, 'Swadhin Kumar Behera': {'DNA'}, 'Aaryan Singh': {'WebD'}, 'Souradeep Das': {'Q', 'MN'}, 'Shubham Bairagi': {'DNA', 'AMV'}, 'Anamika': {'DNA'}, 'Animesh Raj': {'WebD'}, 'Arnab Jena': {'WebD', 'MN'}, 'Aron Chacko Alan': {'AMV', 'Q'}, 'Binaya Kumar Naik': {'WebD', 'MN'}, 'Dalli Manideep': {'WebD', 'Q', 'MN'}, 'Devangan Mukherjee': {'Q'}, 'Jeffrey Samuel': {'WebD'}, 'Laxmi Kant Jorwal': {'DNA'}, 'Moyili Sneha Satwika': {'DNA'}, 'Nayandeep Deb': {'WebD', 'Q', 'MN'}, 'Ponnapati Thanush Reddy': {'DNA', 'Q'}, 'Rashmi Dinkar Patil': {'DNA', 'MN'}, 'Rishabh Dehariya': {'MN'}, 'Rishith Prabhat': {'MN'}, 'Rohan Prakash Sahu': {'MN'}, 'Shehryaar Shah Khan': {'Q'}, 'Swaraj Dian': {'DNA', 'Q'}, 'Tridibesh Sarkar': {'DNA'}, 'Trishna Das': {'DNA'}, 'Varun Ponnekanti': {'MN'}, 'Vasa Harish': {'DNA'}, 'Viswasarathi N M': {'DNA'}}
-freshers_t = {'Anuj Mangaj': {'AMV'}, 'Nivedhitha Somasundaram': {'AMV', 'Q'}, 'Sarthak Jhanwar': {'Q'}, 'Uday Kalyan S': {'WebD'}, 'Bakka Veera Brahma Reddy': {'AMV'}, 'Parandhaman Gokul': {'DNA'}, 'Arnav Gawade': {'Q'}, 'Garv Kumar': {'MN'}, 'Gokul Vemuri': {'Q'}, 'Seeram Rama Prajval': {'Q'}, 'Afrin Munshi': {'MN'}, 'Ayush Thawkar': {'MN'}, 'Tadi Joshua Raj ': {'WebD'}, 'Arul Rana': {'MN', 'Q'}, 'Angshuman Acharya': {'DNA', 'Q'}, 'Rudresh Mohapatra': {'DNA'}, 'Akshara Muralikrishnan': {'MN', 'Q'}, 'Himanshu Kumar': {'DNA'}, 'Bhumi Garg ': {'Music'}, 'Pratibha Shakya ': {'DNA'}}
+# Reading the interview problem from a CSV. Though this is incrediby centric to the MASK problem.
+def read_interview_problem(problem_csv_filepath):
+    res = dict()
+    with open(problem_csv_filepath, "r", newline="") as problem_csv:
+        problem_reader = csv.reader(problem_csv)
+        next(problem_reader)#Skipping the header always. IMPORTANT. MUST HAVE HEADER.
+        for row in problem_reader:
+            if row==[] or "##" in row[0]: #Adding commenting feature
+                continue
+            if len(row) == 1:
+                raise Warning("Only 1 field (presumed to be name) present!")
+            name = row[0]
+            teams = row[1:]
+            #Some input handling
+            if teams!=[]:
+                for ind,val in enumerate(teams[:]):
+                    if "," in val: #If the teams were put in one cell this happens
+                        del teams[ind]
+                        teams.extend(val.split(","))
+                teams = [team for team in teams if team.strip()!='']
+                for ind,val in enumerate(teams[:]):
+                    Val = val.upper().strip()
+                    if Val in ["MN"]: teams[ind] = "MN"
+                    if Val in ["Q", "QUIZ"]: teams[ind] = "Q"
+                    if Val in ["AMV", "ANIME MUSIC VIDEO"]: teams[ind] = "AMV"
+                    if Val in ["WEBD", "W", "WEB"]: teams[ind] = "WebD"
+                    if Val in ["DNA", "D&A", "DESIGN AND ARTS", "DESIGN & ARTS"]: teams[ind] = "DNA"
+                    if Val in ["MUSIC", "M"]: teams[ind] = "Music"
+
+            res[name] = set(teams)
+    
+    return res
+
+INTERVIEWERS_CSV = "MASK_Scheduling_Interviewers.csv"
+CANDIDATES_CSV = "MASK_Scheduling_Candidates.csv"
+
+interviewers_t = read_interview_problem(INTERVIEWERS_CSV)
+candidates_t = read_interview_problem(CANDIDATES_CSV)
 
 #This framework of building interviewers and cadidates will allow us to convert the MASK problem to general later
-INTERVIEWERS = [{'id': name, 'skills': list(teams)} for name, teams in assocs_t.items()]
-CANDIDATES = [{'id': name, 'applied': list(teams)} for name, teams in freshers_t.items()]
+INTERVIEWERS = [{'id': name, 'skills': list(teams)} for name, teams in interviewers_t.items()]
+CANDIDATES = [{'id': name, 'applied': list(teams)} for name, teams in candidates_t.items()]
 
 INT_ID_MAP = {i: iv['id'] for i, iv in enumerate(INTERVIEWERS)}
 INT_SKILL_MAP = {iv['id']: set(iv['skills']) for iv in INTERVIEWERS}
@@ -155,22 +192,87 @@ def evaluate(ind):
     return (hard_penalty, makespan_penalty, workload_penalty, relevance_penalty, fragmentation_penalty, unique_panel_penalty)
 toolbox.register("evaluate", evaluate)
 
+# Saving and Loading.
+#   For GAs, and in general population-based metaheuristics is the ability to optimise taking an nth generation as the initial-population instead of a random population, which lets us run the program for a few generations, see the result, and then run for more if we believe improvement is possible. This is rarely implemented so this was my first use of the concept.
+
+CHECKPOINT_FILE = "MASK_sch_curr_best_pop.dat"
+
+def save_checkpoint(population, filename):
+    try:
+        with open(filename, "wb") as f:
+            pickle.dump(population, f)
+        print(f"[Checkpoint] Successfully saved population to {filename}")
+    except Exception as e:
+        print(f"[Checkpoint] Warning: File existed but failed to load {e}. Starting fresh.")
+    return None
+
+def load_checkpoint(filename):
+    if not os.path.exists(filename):
+        return None
+    try:
+        if os.path.getsize(filename) > 0:
+            with open(filename, "rb") as f:
+                pop = pickle.load(f)
+                print(f"[Checkpoint] Loaded population of size {len(pop)} from {filename}")
+                return pop
+    except Exception as e:
+        print(f"[Checkpoint] Warning: File existed but failed to load ({e}). Starting fresh.")
+    return None
+
 def main():
     POP_SIZE = 400
     NGEN = 150
 
-    pop = toolbox.population(n=POP_SIZE)
+    pop = load_checkpoint(CHECKPOINT_FILE)
+    old_best_fitness_vector = None
+    if pop is None:
+        print("[Start] No valid checkpoint found. Initializing random population.")
+        pop = toolbox.population(n=POP_SIZE)
+        # For a fresh run, any result is "better" than nothing
+        # We can treat old_best_fitness_vector as None or extremely bad
+    else:
+        # Evaluate the loaded population immediately (because I don't care if fitness was present in the pickle dump)
+        fitnesses = list(map(toolbox.evaluate, pop))
+        for ind, fitness in zip(pop, fitnesses):
+            ind.fitness.values=fitness
+        
+        current_best = tools.selBest(pop, 1)[0]
+        old_best_fitness_vector = current_best.fitness.values
+        print(f"[Start] Best fitness in the loaded file: {old_best_fitness_vector}")
+    
     hof = tools.HallOfFame(1)
 
-    stats = tools.Statistics(lambda ind: ind.fitness.values)
-    stats.register("min", np.min, axis=0)
+    # Turns out DEAP gives all individuals an attribute fitness which behaves exactly as applying the WEIGHTS and direction (minimization/maximization of fitness) onto the vector of individual fitnesses
+    # If fitness1 > fitness2 then the individual 1 is always better. Even if the problem was minimization, which is our case, it doesn't mean that fitness1 > fitness2 means that after multiplying with weights the value obtained is more for 1. Since the goal is minimisation, lower value would give fitness1 > fitness2.
+    # The previous one was comparing vectors which was going in the lexicographic sorting.
+    stats = tools.Statistics(lambda ind: ind.fitness)
+    stats.register("min", lambda fitnesses: np.max(fitnesses).values)
 
     print("Starting Evolution...")
-    pop, log = algorithms.eaSimple(pop, toolbox, cxpb=0.7, mutpb=0.3, ngen=NGEN,
+    pop, log = algorithms.eaSimple(pop, toolbox, cxpb=0.7, mutpb=0.4, ngen=NGEN,
                                     stats=stats, halloffame=hof, verbose=True)
 
     best_ind = hof[0]
     scores = evaluate(best_ind)
+    new_best_fitness_vector = best_ind.fitness.values
+
+    should_save = False
+    if old_best_fitness_vector is None:
+        print("\n[Result] First run completed.")
+        should_save = True
+    else:
+        if best_ind.fitness > current_best.fitness:
+            print(f"\n[Result] Improvement found! \nOld: {old_best_fitness_vector} \nNew: {new_best_fitness_vector}")
+            should_save = True
+        elif best_ind.fitness == current_best.fitness:
+            print("\n[Result] No improvement (fitness equal). Saving anyway to preserve genetic diversity evolution in population.")
+            should_save = True
+        else:
+            print(f"\n[Result] New generation is worse, (Old: {old_best_fitness_vector} vs New: {new_best_fitness_vector}). NOT updating file.")
+            should_save = False
+    
+    if should_save:
+        save_checkpoint(pop, CHECKPOINT_FILE)
 
     print("\n" + "="*50)
     print("FINAL SCHEDULE METRICS")
