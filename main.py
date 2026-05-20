@@ -130,7 +130,7 @@ def evaluate(ind):
     unique_panel_penalty=0
 
     #Helpers to define the penalties
-    max_slot_used=min_slot_used=0
+    makespan_score=0
     max_workload=0 #workload_penalty is actually literally that the maxiumum worload be minimised so workload_penalty = max_workload
 
     #Objects made during the process of evaluation.
@@ -160,11 +160,6 @@ def evaluate(ind):
         interviewer_schedule[i2].append(slot)
         used_pairs.add((i1,i2))
 
-        if slot > max_slot_used:
-            max_slot_used  = slot
-        if slot < min_slot_used:
-            min_slot_used = slot
-
     for i_idx, slots in interviewer_schedule.items():
         unique_slots = sorted(list(set(slots)))
         if len(slots)!= len(unique_slots):
@@ -183,11 +178,12 @@ def evaluate(ind):
     for slot, count in slot_usage.items():
         if count > MAX_PARALLEL_INTERVIEWS:
             venue_penalty += (count - MAX_PARALLEL_INTERVIEWS)
+        makespan_score += slot*count
     unique_panel_penalty += len(used_pairs)
 
     #Using the helpers
     hard_penalty = candidate_satisfice_penalty + double_booking_penalty + venue_penalty
-    makespan_penalty = max_slot_used-min_slot_used
+    makespan_penalty = makespan_score # The makespan score is dot product of slotnumber and number of interviews in the slot.
     workload_penalty = max_workload
     return (hard_penalty, makespan_penalty, workload_penalty, relevance_penalty, fragmentation_penalty, unique_panel_penalty)
 toolbox.register("evaluate", evaluate)
