@@ -4,7 +4,7 @@ from deap import base, creator, tools, algorithms
 import collections
 
 # Taking the approach of a Genetic Algorithm (GA) for this since I did a tutorial of solving VRP with GA.
-# The indidivual is a list of tuples of the format (Interviewer1, Interviewer2, Slot) which will be called a gene. This is because the list of candidates is constant.
+# The individual is a list of tuples of the format (Interviewer1, Interviewer2, Slot) which will be called a gene. This is because the list of candidates is constant.
 
 # Everything about the GA will be explained as the code goes.
 
@@ -36,6 +36,8 @@ MAX_PARALLEL_INTERVIEWS = 5
 # 5. Fragmentation penalty
 # 6. Unique Panel penalty.
 
+toolbox = base.Toolbox()
+
 # GA Weights
 GA_WEIGHTS = (-10000.0, -50.0, -20.0, -5.0, -5.0, -1.0)
 creator.create("FitnessMin", base.Fitness, weights=GA_WEIGHTS)
@@ -43,10 +45,10 @@ creator.create("Individual", list, fitness=creator.FitnessMin)
 
 # A GA is applied onto a the problem by the implementation of the following:
 #   Gene and Individual Representation: 
-#       1. Creating an Indidivual. An indidual is composed of genes which defines the individual.
-#       2. Tweaking an individual. The way indidividuals are changed. (refer to Metaheristics Essentials)
+#       1. Creating an individual. An indidual is composed of genes which defines the individual.
+#       2. Tweaking an individual. The way individuals are changed. (refer to Metaheristics Essentials)
 #           2.1. Mutation. Parent undergoes a change with a small probability and gives child.
-#           2.2. Crossover. This means two (or more) indidivuals combine to create two (or more) individuals sharing genes if their parents.
+#           2.2. Crossover. This means two (or more) individuals combine to create two (or more) individuals sharing genes if their parents.
 #       3. Fitness assessment. Finding the fitness (evaluate) of an individual.
 
 # These are implemented for our problem by functions:
@@ -56,7 +58,7 @@ creator.create("Individual", list, fitness=creator.FitnessMin)
 
 def create_gene():
     #Since the individual is a list of (Interviewer1, Interviewer2, Slot), the gene is a tuple of (Interviewer1, Interviewer2, Slot)
-    i1,i2 = sorted(random.sample(range(INTERVIEWERS), 2))
+    i1,i2 = sorted(random.sample(range(NUM_INTERVIEWERS), 2))
     slot = random.randint(0, TOTAL_SLOTS-1)
     return [i1,i2,slot]
 
@@ -72,6 +74,8 @@ def custom_mutate(ind, indpb):
                 ind[i][0], ind[i][1] = sorted(random.sample(range(NUM_INTERVIEWERS), 2))
     return ind,
 
+toolbox.register("individual", tools.initIterate, creator.Individual, create_individual)
+toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 toolbox.register("mate", tools.cxTwoPoint)
 toolbox.register("mutate", custom_mutate, indpb=0.1)
 toolbox.register("select", tools.selTournament, tournsize=3)
@@ -94,10 +98,10 @@ def evaluate(ind):
 
     #Objects made during the process of evaluation.
     slot_usage=collections.defaultdict(int)
-    interviewer_schedule=collections.defaultdict(int)
+    interviewer_schedule=collections.defaultdict(list)
     used_pairs=set()
     
-    for c_idx,gene in enumerate(indidivual):
+    for c_idx,gene in enumerate(ind):
         i1, i2, slot = gene
         cand = CANDIDATES[c_idx]
         req_skills = set(cand['applied'])
@@ -131,7 +135,7 @@ def evaluate(ind):
         
         workload = len(unique_slots)
         if workload > max_workload:
-            max_workload = count
+            max_workload = workload
         
         if len(unique_slots) > 1:
             for k in range(len(unique_slots)-1):
@@ -149,10 +153,85 @@ def evaluate(ind):
     makespan_penalty = max_slot_used-min_slot_used
     workload_penalty = max_workload
     return (hard_penalty, makespan_penalty, workload_penalty, relevance_penalty, fragmentation_penalty, unique_panel_penalty)
+toolbox.register("evaluate", evaluate)
 
 def main():
-    print("Hello from kgpsociety-interview-scheduling!")
+    POP_SIZE = 400
+    NGEN = 150
 
+    pop = toolbox.population(n=POP_SIZE)
+    hof = tools.HallOfFame(1)
 
+    stats = tools.Statistics(lambda ind: ind.fitness.values)
+    stats.register("min", np.min, axis=0)
+
+    print("Starting Evolution...")
+    pop, log = algorithms.eaSimple(pop, toolbox, cxpb=0.7, mutpb=0.3, ngen=NGEN,
+                                    stats=stats, halloffame=hof, verbose=True)
+
+    best_ind = hof[0]
+    scores = evaluate(best_ind)
+
+    print("\n" + "="*50)
+    print("FINAL SCHEDULE METRICS")
+    # 1. Hard Penalty. All hard-penalties have same high weight in this context. Hard penalty = Satisfice (of candidate) penalty + Double booking (interviewer) penalty + Venue (overbooking) penalty
+# 2. Makespan penalty
+# 3. Workload penalty
+# 4. Relevance penalty
+# 5. Fragmentation penalty
+# 6. Unique Panel penalty.
+
+    print("="*70)
+    print(f"1. Hard Penalty:                                              {scores[0]} (Target: 0)")
+    print(f"2. Makespan Penalty:                                          {scores[1]}")
+    print(f"3. Max Workload:                                              {scores[2]}")
+    print(f"4. No of interviewers irrelevant to candidate (Relevance):    {scores[3]}")
+    print(f"5. Sum of Gaps between interviews of an interviewer:          {scores[4]}")
+    print(f"6. No. of Unique Panels:                                      {scores[5]}")
+    print("-"*70)
+    
+    # OUTPUT FORMATTING
+    if scores[0] > 0:
+        print("WARNING: Hard constraints violated.")
+    
+    schedule_map = collections.defaultdict(list)
+    interviewer_load = collections.defaultdict(int)
+
+    for c_idx, gene in enumerate(best_ind):
+        i1, i2, slot = gene
+        c_name = CANDIDATES[c_idx]['id']
+        i1_name = INT_ID_MAP[i1]
+        i2_name = INT_ID_MAP[i2]
+        
+        # Check relevance for display
+        cand_req = set(CANDIDATES[c_idx]['applied'])
+        s1 = INT_SKILL_MAP[i1_name]
+        s2 = INT_SKILL_MAP[i2_name]
+        
+        # Tagging strictly relevant interviewers
+        i1_tag = "*" if not s1.intersection(cand_req) else ""
+        i2_tag = "*" if not s2.intersection(cand_req) else ""
+        
+        schedule_map[slot].append(f"({c_name}, {i1_name}{i1_tag}, {i2_name}{i2_tag})")
+        interviewer_load[i1_name] += 1
+        interviewer_load[i2_name] += 1
+
+    sorted_slots = sorted(schedule_map.keys())
+    for slot in sorted_slots:
+        day = (slot // SLOTS_PER_DAY) + 1
+        time_slot = (slot % SLOTS_PER_DAY) + 1
+        print(f"\nSlot {slot} (Day {day}, Slot {time_slot}):")
+        for entry in schedule_map[slot]:
+            print(f"  {entry}")
+            
+    print("\nNOTE: '*' indicates the interviewer shares no applied skill with the candidate.")
+    
+    print("\n" + "="*50)
+    print("INTERVIEWER WORKLOAD")
+    print("="*50)
+    sorted_load = sorted(interviewer_load.items(), key=lambda x: x[1], reverse=True)
+    for name, load in sorted_load:
+        print(f"{name}: {load}")
+    
 if __name__ == "__main__":
     main()
