@@ -23,22 +23,25 @@ It should be noted that the constraints are being framed as generally as possibl
 3. At any (time)slot, the number of interviews taking place must not exceed the maximum allowed interviews by the venue. HARD CONSTRAINT.
     
     This will be referred to as venue penalty.
-4. It is preferred for the interviews to finish in the least time possible and as earl
+4. An interviewer cannot have an interview in a slot where he declares his inavalability. HARD CONSTRAINT.
+    
+    This will be referred to as inavailability penalty.
+5. It is preferred for the interviews to finish in the least time possible and as earl
 y as possible. SOFT PENALTY.
     
    This will be referred to as "Makespan" penalty.
-5. It is preferred that each interviewer shares a "fair" amount of workload. For now, we say that the maximum number of interviews being conducted by a member should be minimised.
+6. It is preferred that each interviewer shares a "fair" amount of workload. For now, we say that the maximum number of interviews being conducted by a member should be minimised.
     
     This will be referred to as "Workload" penalty.
-6. It is preferred that all interviewers share atleast one team with the candidate. SOFT PENALTY.
+7. It is preferred that all interviewers share atleast one team with the candidate. SOFT PENALTY.
     
     This will be referred to as "Relevance" penalty.
-7. It is preferred that all interviews for a certain interviewer be done in a continuous strech. i.e. the gaps between the interviews for an interviewer should be minimised.
+8. It is preferred that all interviews for a certain interviewer be done in a continuous strech. i.e. the gaps between the interviews for an interviewer should be minimised.
     
     This will be referred to as "Fragmentation" penalty
-8. Interviewers may have a tendency to conduct interviews with the same co-interviewers. So the number of unique-sets of interviewers can be minimised. SOFT PENALTY. 
+9. Interviewers may have a tendency to conduct interviews with the same co-interviewers. So the number of unique-sets of interviewers can be minimised. SOFT PENALTY. 
 
     This is not a penalty we will look to much but is presented as it was given in a literature I was reading. This is called the "Unique Panels" penalty. Kinda not-obvious from name.
 
-9. 
+20. 
     More constraints to be added further.

@@ -1,7 +1,7 @@
 # Goals.
 ## 1. Add CSV support for a simple fresher-assoc scheduling. DONE
 ## 2. Add support for a mixed fresher-assoc for assoc scheduling.
-## 3. Add interviewer availability from CSV.
+## 3. Add interviewer availability from CSV. DONE
 ## 4. Add re-scheduling interviews of candidates.
 ## 5. To add repair operator under mutate.
 ## 6. To add lexicographic weights (instead of weighted average comparison, first compare hard-weights (averaged) then the soft weights)
@@ -59,6 +59,7 @@ def read_interview_problem(problem_csv_filepath):
 
 INTERVIEWERS_CSV = "MASK_Scheduling_Interviewers.csv"
 CANDIDATES_CSV = "MASK_Scheduling_Candidates.csv"
+AVAILABILITY_CSV = "MASK_Interviewer_Availability.csv"
 
 interviewers_t = read_interview_problem(INTERVIEWERS_CSV)
 candidates_t = read_interview_problem(CANDIDATES_CSV)
@@ -77,6 +78,33 @@ DAYS = 2
 SLOTS_PER_DAY = 10
 TOTAL_SLOTS = DAYS * SLOTS_PER_DAY
 MAX_PARALLEL_INTERVIEWS = 5
+
+def read_interviewer_schedule(schedule_path):
+    is_available = {}
+    with open(schedule_path, "r", newline="") as schedule_csv:
+        schedule_reader = csv.reader(schedule_csv)
+        next(schedule_reader)
+        for row in schedule_reader:
+            if row==[] or "##" in row[0]:
+                continue
+            if len(row) == 1:
+                raise Warning("Only 1 field (presumed to be name) present!")
+            name = row[0]
+            slots = row[1:]
+            sch = []
+            for t in slots:
+                if "n" in t or "N" in t:
+                    sch.append(False)
+                else:
+                    sch.append(True)
+            remaining = TOTAL_SLOTS-len(slots)
+            sch.extend([False,]*remaining)
+            is_available[name] = sch
+    
+    return is_available
+
+INTERVIEWER_AVAILABLE = read_interviewer_schedule(AVAILABILITY_CSV)
+INT_AVAILABLE = {i: INTERVIEWER_AVAILABLE[name] for i,name in enumerate(interviewers_t.keys())}
 
 # Deap configuration
 # The fitness is a weighted sum of the penalties listed in the problem statement.
@@ -181,6 +209,7 @@ def evaluate(ind):
     candidate_satisfice_penalty=0
     double_booking_penalty=0
     venue_penalty=0
+    inavailability_penalty=0
     makespan_penalty=0
     workload_penalty=0
     relevance_penalty=0
@@ -212,6 +241,13 @@ def evaluate(ind):
             relevance_penalty += 1
         if not s2.intersection(req_skills):
             relevance_penalty += 1
+
+        avl1 = INT_AVAILABLE[i1]
+        avl2 = INT_AVAILABLE[i2]
+        if (not avl1[slot]):
+            inavailability_penalty += 1
+        if (not avl2[slot]):
+            inavailability_penalty += 1
         
         slot_usage[slot] += 1
         interviewer_schedule[i1].append(slot)
@@ -240,7 +276,7 @@ def evaluate(ind):
     unique_panel_penalty += len(used_pairs)
 
     #Using the helpers
-    hard_penalty = candidate_satisfice_penalty + double_booking_penalty + venue_penalty
+    hard_penalty = candidate_satisfice_penalty + double_booking_penalty + venue_penalty + inavailability_penalty
     makespan_penalty = makespan_score # The makespan score is dot product of slotnumber and number of interviews in the slot.
     workload_penalty = max_workload
     return (hard_penalty, makespan_penalty, workload_penalty, relevance_penalty, fragmentation_penalty, unique_panel_penalty)
@@ -376,7 +412,7 @@ def main():
     for slot in sorted_slots:
         day = (slot // SLOTS_PER_DAY) + 1
         time_slot = (slot % SLOTS_PER_DAY) + 1
-        print(f"\nSlot {slot} (Day {day}, Slot {time_slot}):")
+        print(f"\nSlot {slot+1} (Day {day}, Slot {time_slot}):")
         for entry in schedule_map[slot]:
             print(f"  {entry}")
             
