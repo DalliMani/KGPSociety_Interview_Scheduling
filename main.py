@@ -1,3 +1,16 @@
+# Goals.
+## 1. Add CSV support for a simple fresher-assoc scheduling. DONE
+## 2. Add support for a mixed fresher-assoc for assoc scheduling.
+## 3. Add interviewer availability from CSV.
+## 4. Add re-scheduling interviews of candidates.
+## 5. To add repair operator under mutate.
+## 6. To add lexicographic weights (instead of weighted average comparison, first compare hard-weights (averaged) then the soft weights)
+
+#Extra things accomplished:
+## 1. Changed the initialisation to be much less garbage.abs
+## 2. Added warning where there is not interviewer pair for any candidate.
+## 3. Changed the mutation to be progressive instead of teleporting type (small changes) and added the ability to re-create the individual in mutate although that is ridiculously destructive and instead a repair operation is actually supposed to be there.
+
 import random
 import numpy as np
 from deap import base, creator, tools, algorithms
