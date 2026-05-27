@@ -31,7 +31,7 @@ def read_interview_problem(problem_csv_filepath):
         problem_reader = csv.reader(problem_csv)
         next(problem_reader)#Skipping the header always. IMPORTANT. MUST HAVE HEADER.
         for row in problem_reader:
-            if row==[] or "##" in row[0]: #Adding commenting feature
+            if row==[] or row[0].lstrip().startswith("##"): #Adding commenting feature
                 continue
             if len(row) == 1:
                 raise Warning("Only 1 field (presumed to be name) present!")
@@ -73,7 +73,7 @@ INT_SKILL_MAP = {iv['id']: set(iv['skills']) for iv in INTERVIEWERS}
 NUM_INTERVIEWERS = len(INTERVIEWERS)
 NUM_CANDIDATES = len(CANDIDATES)
 
-#The problem specific constraints, taken from 2024 data. We had booking of 3 days, each day we had 4 hours, and in each hour we can conduct approx 3 interviews so it would be 12. But a bit of approximation here and there.
+#The problem specific constraints, taken from 2025 data. We had booking of 3 days, each day we had 4 hours, and in each hour we can conduct approx 3 interviews so it would be 12. But a bit of approximation here and there.
 DAYS = 2
 SLOTS_PER_DAY = 10
 TOTAL_SLOTS = DAYS * SLOTS_PER_DAY
@@ -85,7 +85,7 @@ def read_interviewer_schedule(schedule_path):
         schedule_reader = csv.reader(schedule_csv)
         next(schedule_reader)
         for row in schedule_reader:
-            if row==[] or "##" in row[0]:
+            if row==[] or row[0].lstrip().startswith("##"):
                 continue
             if len(row) == 1:
                 raise Warning("Only 1 field (presumed to be name) present!")
@@ -93,7 +93,7 @@ def read_interviewer_schedule(schedule_path):
             slots = row[1:]
             sch = []
             for t in slots:
-                if "n" in t or "N" in t:
+                if t.strip() in ["n", "N"]:
                     sch.append(False)
                 else:
                     sch.append(True)
