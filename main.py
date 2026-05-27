@@ -2,9 +2,10 @@ import random
 import numpy as np
 from deap import base, creator, tools, algorithms
 import collections
-import os,pickle, warnings
+import os, pickle, warnings, logging
 import csv
 
+logger = logging.getLogger(__name__)
 # Taking the approach of a Genetic Algorithm (GA) for this since I did a tutorial of solving VRP with GA.
 # The individual is a list of tuples of the format (Interviewer1, Interviewer2, Slot) which will be called a gene. This is because the list of candidates is constant.
 
@@ -91,24 +92,68 @@ creator.create("Individual", list, fitness=creator.FitnessMin)
 # These are implemented for our problem by functions:
 #   create_gene, create_individual, custom_mutate, evaluate. We will use builtin Two Point Crossover given by DEAP for the crossover.
 
-# This repo has been made after a lot of coding to get the solution so I will be including key frames of development in the commits. Many improvements will go and then I will then continue the development.
+#Problem-aware operators of create
+# Helper function
+VALID_PAIRS = {}
+for c_idx, candidate in enumerate(CANDIDATES):
+    req_skills = set(candidate['applied'])
+    valid = []
 
-def create_gene():
-    #Since the individual is a list of (Interviewer1, Interviewer2, Slot), the gene is a tuple of (Interviewer1, Interviewer2, Slot)
-    i1,i2 = sorted(random.sample(range(NUM_INTERVIEWERS), 2))
+    for i in range(NUM_INTERVIEWERS):
+        for j in range(i+1, NUM_INTERVIEWERS):
+            s1 = INT_SKILL_MAP[INT_ID_MAP[i]]
+            s2 = INT_SKILL_MAP[INT_ID_MAP[j]]
+
+            if req_skills.issubset(s1.union(s2)):
+                valid.append((i,j))
+    
+    if not valid: #Check if valid is empty
+        warnings.warn(f"No valid interviewer pair exists for candidate: {candidate["id"]}", UserWarning)
+
+    VALID_PAIRS[c_idx] = valid
+
+
+def create_gene(c_idx):
+    #The individual is a list of (Interviewer1, Interviewer2, Slot), the gene is a tuple of (Interviewer1, Interviewer2, Slot)
+    valid_pairs = VALID_PAIRS[c_idx]
+    if valid:
+        i1, i2 = random.choice(valid)
+    else:
+        i1,i2 = sorted(random.sample(range(NUM_INTERVIEWERS), 2))
     slot = random.randint(0, TOTAL_SLOTS-1)
     return [i1,i2,slot]
 
 def create_individual():
-    return [create_gene() for _ in range(NUM_CANDIDATES)]
+    return [create_gene(c_idx) for c_idx in range(NUM_CANDIDATES)]
 
+#Mutate operator should be smooth, as told in Metaheristics Essentials
 def custom_mutate(ind, indpb):
-    for i in range(len(ind)):
-        if random.random() < indpb:
-            if random.random() < 0.5:
-                ind[i][2] = random.randint(0, TOTAL_SLOTS - 1)
+    for c_idx, gene in enumerate(ind):
+        if random.random() >= indpb:
+            continue
+        mutation_type = random.random()
+        if mutation_type < 0.4:
+            #Mutate slot
+            old_slot = gene[2]
+            delta = random.randint(-2,2)
+            gene[2] = max(0, min(TOTAL_SLOTS - 1, old_slot + delta))
+        elif mutation_type < 0.8:
+            #Mutate interviewer
+            valid_pairs = VALID_PAIRS[c_idx]
+            if valid_pairs:
+                i1, i2 = random.choice(valid_pairs)
+                gene[0], gene[1] = i1, i2
             else:
-                ind[i][0], ind[i][1] = sorted(random.sample(range(NUM_INTERVIEWERS), 2))
+                replace_idx = random.randint(0,1)
+                new_i = random.randrange(NUM_INTERVIEWERS)
+                while new_i == gene[1 - replace_idx]:
+                    new_i = random.randrange(NUM_INTERVIEWERS)
+                gene[replace_idx] = new_i
+                gene[0],gene[1] = sorted(gene[:2])
+        else:
+            #Here acc to the book, it is preferred to have a repair operation but since I am too lazy to define a repair operation.
+            # So let's create a new individual
+            ind[c_idx] = create_gene(c_idx)
     return ind,
 
 toolbox.register("individual", tools.initIterate, creator.Individual, create_individual)
@@ -217,7 +262,7 @@ def load_checkpoint(filename):
 
 def main():
     POP_SIZE = 400
-    NGEN = 150
+    NGEN = 500
 
     pop = load_checkpoint(CHECKPOINT_FILE)
     old_best_fitness_vector = None
